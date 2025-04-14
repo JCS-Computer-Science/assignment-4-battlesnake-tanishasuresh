@@ -24,20 +24,44 @@ const config = {
 
 //TODO: respond to GET requests on "/" with the config object above
 
+app.get("/", (req,res)=>{
+  res.send(config);
+})
+
 //TODO: respond to POST requests on "/start". Your response itself is ignored, but must have status code "200"
 //      the request body will contain objects representing the game instance, game board state, and your snake
 //      https://docs.battlesnake.com/api/requests/start
+
+app.post("/start", (req,res)=>{
+  res.status(200);
+  res.send()
+})
 
 //TODO: respond to POST requests on "/move". Your response should be an object with a "move" property and optionally
 //      a "shout" property. The request body again contains objects representing the game state
 //      https://docs.battlesnake.com/api/requests/move
 
+app.post("/move", (req,res)=>{
+  let move = move(req.body)
+  res.send(move)
+})
+
+
 //TODO: respond to POST requests on "/end", which signals the end of a game. Your response itself is ignored, 
 //      but must have status code "200" the request body will contain objects representing the game
 //      https://docs.battlesnake.com/api/requests/end
 
+app.post("/end", (req,res)=>{
+  res.status(200);
+  res.send();
+})
+
+
+
+
 const host = '0.0.0.0';
 const port = process.env.PORT || 8000;
+
 
 app.listen(port, host, () => {
   console.log(`Running Battlesnake at http://${host}:${port}...`)

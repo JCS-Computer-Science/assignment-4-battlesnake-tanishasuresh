@@ -27,6 +27,22 @@ export default function move(gameState){
     // gameState.board contains an object representing the game board including its width and height
     // https://docs.battlesnake.com/api/objects/board
     
+    const boardWidth = gameState.board.width;
+    const boardHeight = gameState.board.height;
+    
+    if (myHead.x === 0) {             // Head is at the left edge, don't move left
+        moveSafety.left = false;
+    }
+    if (myHead.x === boardWidth - 1) { // Head is at the right edge, don't move right
+        moveSafety.right = false;
+    }
+    if (myHead.y === 0) {             // Head is at the bottom edge, don't move down
+        moveSafety.down = false;
+    }
+    if (myHead.y === boardHeight - 1) { // Head is at the top edge, don't move up
+        moveSafety.up = false;
+    }
+   
     // TODO: Step 2 - Prevent your Battlesnake from colliding with itself
     // gameState.you contains an object representing your snake, including its coordinates
     // https://docs.battlesnake.com/api/objects/battlesnake
