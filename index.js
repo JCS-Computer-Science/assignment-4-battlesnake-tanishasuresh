@@ -17,9 +17,9 @@ app.use(express.json());
 const config = {
   apiversion: "1",
   author: "",       // TODO: Your Battlesnake Username
-  color: "#cb82ff", // TODO: Choose color
-  head: "default",  // TODO: Choose head, see https://play.battlesnake.com/customizations/ for options unlocked in your account
-  tail: "default",  // TODO: Choose tail, see https://play.battlesnake.com/customizations/ for options unlocked in your account
+  color: "#654cd4", // TODO: Choose color
+  head: "fang",  // TODO: Choose head, see https://play.battlesnake.com/customizations/ for options unlocked in your account
+  tail: "mlh-gene",  // TODO: Choose tail, see https://play.battlesnake.com/customizations/ for options unlocked in your account
 }
 
 //TODO: respond to GET requests on "/" with the config object above
@@ -42,8 +42,8 @@ app.post("/start", (req,res)=>{
 //      https://docs.battlesnake.com/api/requests/move
 
 app.post("/move", (req,res)=>{
-  let move = move(req.body)
-  res.send(move)
+  let NewMove = move(req.body)
+  res.send(NewMove)
 })
 
 
