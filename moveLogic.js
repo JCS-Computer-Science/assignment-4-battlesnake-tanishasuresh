@@ -110,6 +110,8 @@ export default function move(gameState) {
         let closestFood = food[0];
         let closestDistance = Math.abs(food[0].x - myHead.x) + Math.abs(food[0].y - myHead.y);
 
+        
+
         for (const f of food) {
             const distance = Math.abs(f.x - myHead.x) + Math.abs(f.y - myHead.y);
             if (distance < closestDistance) {
