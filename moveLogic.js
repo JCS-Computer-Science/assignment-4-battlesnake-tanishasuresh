@@ -12,6 +12,7 @@ export default function move(gameState) {
     const myBody = gameState.you.body;
     const board = gameState.board;
     const { width: boardWidth, height: boardHeight } = board;
+    const myHealth = gameState.you.health;
 
     // Prevent moving backwards
     if (myNeck.x < myHead.x) moveSafety.left = false;
@@ -55,6 +56,14 @@ export default function move(gameState) {
         }
     }
 
+    // Spin in a circle if health is above 70
+    if (myHealth >= 70) {
+        if (moveSafety.right) return { move: "right" };
+        if (moveSafety.down) return { move: "down" };
+        if (moveSafety.left) return { move: "left" };
+        if (moveSafety.up) return { move: "up" };
+    }
+
     // Avoid trap spaces using simulation
     for (const [direction, position] of Object.entries(getDirections(myHead))) {
         if (moveSafety[direction] && !simulateEscape(position, 3, boardWidth, boardHeight, gameState)) {
@@ -62,13 +71,14 @@ export default function move(gameState) {
         }
     }
 
-    // Target the closest food
-    const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety);
-    if (foodMove) return { move: foodMove };
+    // Target the closest food if health is below 70
+    if (myHealth < 70) {
+        const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety);
+        if (foodMove) return { move: foodMove };
+    }
 
     // Fallback to a safe and random move
     const safeMoves = Object.keys(moveSafety).filter(direction => moveSafety[direction]);
-    //Object.keys(moveSafety) returns ["up", "down", "left", "right"]
     if (safeMoves.length === 0) {
         return { move: "down" };
     }
