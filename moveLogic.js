@@ -34,57 +34,50 @@ export default function move(gameState) {
         if (segment.x === myHead.x + 1 && segment.y === myHead.y) moveSafety.right = false;
     }
 
-    // Predict and avoid enemy snake moves
-    for (const snake of gameState.board.snakes) {
-        if (snake.id === gameState.you.id) continue;
-
-        const enemyHead = snake.body[0];
-        const enemyLength = snake.body.length;
-
-        // Avoid enemy head moves
-        if (enemyHead.x === myHead.x && enemyHead.y === myHead.y + 1 && enemyLength >= myLength) moveSafety.up = false;
-        if (enemyHead.x === myHead.x && enemyHead.y === myHead.y - 1 && enemyLength >= myLength) moveSafety.down = false;
-        if (enemyHead.x === myHead.x - 1 && enemyHead.y === myHead.y && enemyLength >= myLength) moveSafety.left = false;
-        if (enemyHead.x === myHead.x + 1 && enemyHead.y === myHead.y && enemyLength >= myLength) moveSafety.right = false;
-
-        // Avoid enemy body positions
-        for (const segment of snake.body) {
-            if (segment.x === myHead.x && segment.y === myHead.y + 1) moveSafety.up = false;
-            if (segment.x === myHead.x && segment.y === myHead.y - 1) moveSafety.down = false;
-            if (segment.x === myHead.x - 1 && segment.y === myHead.y) moveSafety.left = false;
-            if (segment.x === myHead.x + 1 && segment.y === myHead.y) moveSafety.right = false;
-        }
-    }
-
-    // Avoid trap spaces using flood-fill space calculation
+    // Avoid trap spaces using enhanced flood-fill space calculation
     for (const [direction, position] of Object.entries(getDirections(myHead))) {
         if (moveSafety[direction] && !hasSufficientSpace(position, myBody, gameState)) {
             moveSafety[direction] = false;
         }
     }
 
-    // Target the closest food
-    const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety);
+    // Target the closest food while avoiding contested food
+    const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety, gameState, myLength);
     if (foodMove) return { move: foodMove };
 
-    // Fallback to a safe and random move
+    // Fallback to a safe and random move with additional out-of-bounds checks
     const safeMoves = Object.keys(moveSafety).filter(direction => moveSafety[direction]);
     if (safeMoves.length === 0) {
         console.log(`MOVE ${gameState.turn}: No safe moves detected! Moving down`);
-        return { move: "down" };
+        return { move: "down" }; // Default fallback
     }
 
-    const nextMove = safeMoves[Math.floor(Math.random() * safeMoves.length)];
+    // Ensure fallback move doesn't accidentally go out of bounds
+    const validatedMoves = safeMoves.filter(direction => {
+        const nextPosition = getDirections(myHead)[direction];
+        return (
+            nextPosition.x >= 0 &&
+            nextPosition.x < boardWidth &&
+            nextPosition.y >= 0 &&
+            nextPosition.y < boardHeight
+        );
+    });
+
+    // Pick a random validated move
+    const nextMove = validatedMoves.length > 0
+        ? validatedMoves[Math.floor(Math.random() * validatedMoves.length)]
+        : safeMoves[Math.floor(Math.random() * safeMoves.length)]; // Fallback if no validated moves
+
     console.log(`MOVE ${gameState.turn}: ${nextMove}`);
     return { move: nextMove };
 }
 
-function getDirections(myHead) {
+function getDirections(head) {
     return {
-        left: { x: myHead.x - 1, y: myHead.y },
-        right: { x: myHead.x + 1, y: myHead.y },
-        down: { x: myHead.x, y: myHead.y - 1 },
-        up: { x: myHead.x, y: myHead.y + 1 }
+        left: { x: head.x - 1, y: head.y },
+        right: { x: head.x + 1, y: head.y },
+        down: { x: head.x, y: head.y - 1 },
+        up: { x: head.x, y: head.y + 1 }
     };
 }
 
@@ -134,27 +127,48 @@ function hasSufficientSpace(start, myBody, gameState) {
     return spaceCount > myBody.length;
 }
 
-function prioritizeFood(food, myHead, moveSafety) {
+function prioritizeFood(food, myHead, moveSafety, gameState, myLength) {
     if (food.length === 0) return null;
 
-    let closestFood = null;
+    let bestMove = null;
     let closestDistance = Infinity;
 
     for (const f of food) {
         const distance = Math.abs(f.x - myHead.x) + Math.abs(f.y - myHead.y);
 
+        let isFoodContested = false;
+
+        // Check if any other snake is approaching the same food
+        for (const snake of gameState.board.snakes) {
+            if (snake.id === gameState.you.id) continue; // Skip your own snake
+
+            const enemyHead = snake.body[0];
+            const enemyDistance = Math.abs(f.x - enemyHead.x) + Math.abs(f.y - enemyHead.y);
+
+            // If another snake is closer or equally close, mark the food as contested
+            if (enemyDistance <= distance) {
+                isFoodContested = true;
+                break;
+            }
+        }
+
+        // Skip this food if it's contested
+        if (isFoodContested) continue;
+
+        // Update the closest uncontested food
         if (distance < closestDistance) {
-            closestFood = f;
             closestDistance = distance;
+            bestMove = determineMoveDirection(f, myHead, moveSafety);
         }
     }
 
-    if (closestFood) {
-        if (closestFood.x < myHead.x && moveSafety.left) return "left";
-        if (closestFood.x > myHead.x && moveSafety.right) return "right";
-        if (closestFood.y < myHead.y && moveSafety.down) return "down";
-        if (closestFood.y > myHead.y && moveSafety.up) return "up";
-    }
+    return bestMove;
+}
 
-    return null;
+function determineMoveDirection(target, myHead, moveSafety) {
+    if (target.x < myHead.x && moveSafety.left) return "left";
+    if (target.x > myHead.x && moveSafety.right) return "right";
+    if (target.y < myHead.y && moveSafety.down) return "down";
+    if (target.y > myHead.y && moveSafety.up) return "up";
+    return null; // No safe move toward the target
 }
