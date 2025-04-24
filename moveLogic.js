@@ -34,6 +34,22 @@ export default function move(gameState) {
         if (segment.x === myHead.x + 1 && segment.y === myHead.y) moveSafety.right = false;
     }
 
+    // Prevent head-to-head collisions with other snakes
+    for (const snake of gameState.board.snakes) {
+        if (snake.id === gameState.you.id) continue; // Skip your own snake
+
+        const enemyHead = snake.body[0];
+        const enemyPossibleMoves = getDirections(enemyHead);
+
+        for (const [direction, position] of Object.entries(getDirections(myHead))) {
+            for (const enemyPosition of Object.values(enemyPossibleMoves)) {
+                if (position.x === enemyPosition.x && position.y === enemyPosition.y) {
+                    moveSafety[direction] = false; // Mark the direction as unsafe
+                }
+            }
+        }
+    }
+
     // Avoid trap spaces using enhanced flood-fill space calculation
     for (const [direction, position] of Object.entries(getDirections(myHead))) {
         if (moveSafety[direction] && !hasSufficientSpace(position, myBody, gameState)) {
@@ -45,7 +61,7 @@ export default function move(gameState) {
     const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety, gameState, myLength);
     if (foodMove) return { move: foodMove };
 
-    // Fallback to a safe and random move with additional out-of-bounds checks
+    // Fallback to a safe move with strict out-of-bounds checks
     const safeMoves = Object.keys(moveSafety).filter(direction => moveSafety[direction]);
     if (safeMoves.length === 0) {
         console.log(`MOVE ${gameState.turn}: No safe moves detected! Moving down`);
