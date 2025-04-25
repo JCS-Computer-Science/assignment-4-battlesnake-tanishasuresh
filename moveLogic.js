@@ -34,17 +34,20 @@ export default function move(gameState) {
         if (segment.x === myHead.x + 1 && segment.y === myHead.y) moveSafety.right = false;
     }
 
-    // Prevent head-to-head collisions with other snakes
+    // Allow head-to-head collisions only if my snake is larger
     for (const snake of gameState.board.snakes) {
         if (snake.id === gameState.you.id) continue; // Skip your own snake
 
         const enemyHead = snake.body[0];
+        const enemyLength = snake.body.length;
         const enemyPossibleMoves = getDirections(enemyHead);
 
         for (const [direction, position] of Object.entries(getDirections(myHead))) {
             for (const enemyPosition of Object.values(enemyPossibleMoves)) {
                 if (position.x === enemyPosition.x && position.y === enemyPosition.y) {
-                    moveSafety[direction] = false; // Mark the direction as unsafe
+                    if (myLength <= enemyLength) {
+                        moveSafety[direction] = false; // Avoid head-to-head if the enemy is larger or equal
+                    }
                 }
             }
         }
@@ -58,7 +61,7 @@ export default function move(gameState) {
     }
 
     // Target the closest food while avoiding contested food
-    const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety, gameState, myLength);
+    const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety, gameState, myLength, boardWidth, boardHeight);
     if (foodMove) return { move: foodMove };
 
     // Fallback to a safe move with strict out-of-bounds checks
@@ -140,16 +143,26 @@ function hasSufficientSpace(start, myBody, gameState) {
     }
 
     // Check if the open space is sufficient for the snake
-    return spaceCount > myBody.length;
+    return spaceCount > myBody.length * 2; // Ensure the space is at least double the snake's length
 }
 
-function prioritizeFood(food, myHead, moveSafety, gameState, myLength) {
+function prioritizeFood(food, myHead, moveSafety, gameState, myLength, boardWidth, boardHeight) {
     if (food.length === 0) return null;
 
     let bestMove = null;
     let closestDistance = Infinity;
 
     for (const f of food) {
+        // Skip food in corners
+        if (
+            (f.x === 0 && f.y === 0) || // Top-left corner
+            (f.x === boardWidth - 1 && f.y === 0) || // Top-right corner
+            (f.x === 0 && f.y === boardHeight - 1) || // Bottom-left corner
+            (f.x === boardWidth - 1 && f.y === boardHeight - 1) // Bottom-right corner
+        ) {
+            continue; // Skip this food
+        }
+
         const distance = Math.abs(f.x - myHead.x) + Math.abs(f.y - myHead.y);
 
         let isFoodContested = false;
