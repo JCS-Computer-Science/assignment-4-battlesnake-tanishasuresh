@@ -11,6 +11,7 @@ export default function move(gameState) {
     const myNeck = gameState.you.body[1];
     const myBody = gameState.you.body;
     const myLength = gameState.you.body.length;
+    const myBodySet = new Set(myBody.map(segment => `${segment.x},${segment.y}`));
     const board = gameState.board;
     const { width: boardWidth, height: boardHeight } = board;
 
@@ -27,41 +28,35 @@ export default function move(gameState) {
     if (myHead.y === boardHeight - 1) moveSafety.up = false;
 
     // Prevent self-collision
-    for (const segment of myBody) {
-        if (segment.x === myHead.x && segment.y === myHead.y + 1) moveSafety.up = false;
-        if (segment.x === myHead.x && segment.y === myHead.y - 1) moveSafety.down = false;
-        if (segment.x === myHead.x - 1 && segment.y === myHead.y) moveSafety.left = false;
-        if (segment.x === myHead.x + 1 && segment.y === myHead.y) moveSafety.right = false;
+    for (const [direction, nextPosition] of Object.entries(getDirections(myHead))) {
+        const key = `${nextPosition.x},${nextPosition.y}`;
+        if (myBodySet.has(key)) {
+            moveSafety[direction] = false; // Avoid moving into a body segment
+        }
     }
 
-    // Allow head-to-head collisions only if my snake is larger
-    for (const snake of gameState.board.snakes) {
-        if (snake.id === gameState.you.id) continue; // Skip your own snake
+    // Avoid head-to-head collisions
+    avoidHeadToHeadCollisions(myHead, moveSafety, gameState, myLength);
 
-        const enemyHead = snake.body[0];
-        const enemyLength = snake.body.length;
-        const enemyPossibleMoves = getDirections(enemyHead);
+    // Avoid tight corners
+    avoidTightCorners(myHead, moveSafety, boardWidth, boardHeight);
 
-        for (const [direction, position] of Object.entries(getDirections(myHead))) {
-            for (const enemyPosition of Object.values(enemyPossibleMoves)) {
-                if (position.x === enemyPosition.x && position.y === enemyPosition.y) {
-                    if (myLength <= enemyLength) {
-                        moveSafety[direction] = false; // Avoid head-to-head if the enemy is larger or equal
-                    }
-                }
+    // Avoid trap spaces using improved flood-fill space calculation
+    const spaceMap = {};
+    for (const [direction, position] of Object.entries(getDirections(myHead))) {
+        if (moveSafety[direction]) {
+            const space = calculateOpenSpace(position, myBody, gameState);
+            spaceMap[direction] = space;
+            if (space < myBody.length * 2) {
+                moveSafety[direction] = false; // Mark as unsafe if space is insufficient
             }
         }
     }
 
-    // Avoid trap spaces using enhanced flood-fill space calculation
-    for (const [direction, position] of Object.entries(getDirections(myHead))) {
-        if (moveSafety[direction] && !hasSufficientSpace(position, myBody, gameState)) {
-            moveSafety[direction] = false;
-        }
-    }
+    console.log(`MOVE ${gameState.turn}: Space Map:`, spaceMap);
 
     // Target the closest food while avoiding contested food
-    const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety, gameState, myLength, boardWidth, boardHeight);
+    const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety, gameState, myBody.length, boardWidth, boardHeight);
     if (foodMove) return { move: foodMove };
 
     // Fallback to a safe move with strict out-of-bounds checks
@@ -71,24 +66,58 @@ export default function move(gameState) {
         return { move: "down" }; // Default fallback
     }
 
-    // Ensure fallback move doesn't accidentally go out of bounds
-    const validatedMoves = safeMoves.filter(direction => {
-        const nextPosition = getDirections(myHead)[direction];
-        return (
-            nextPosition.x >= 0 &&
-            nextPosition.x < boardWidth &&
-            nextPosition.y >= 0 &&
-            nextPosition.y < boardHeight
-        );
-    });
+    // Prioritize moves with the largest open space
+    const bestMove = safeMoves.reduce((best, direction) => {
+        if (!best || spaceMap[direction] > (spaceMap[best] || 0)) {
+            return direction;
+        }
+        return best;
+    }, null);
 
-    // Pick a random validated move
-    const nextMove = validatedMoves.length > 0
-        ? validatedMoves[Math.floor(Math.random() * validatedMoves.length)]
-        : safeMoves[Math.floor(Math.random() * safeMoves.length)]; // Fallback if no validated moves
+    console.log(`MOVE ${gameState.turn}: Best move based on open space: ${bestMove}`);
+    return { move: bestMove };
+}
 
-    console.log(`MOVE ${gameState.turn}: ${nextMove}`);
-    return { move: nextMove };
+function avoidHeadToHeadCollisions(myHead, moveSafety, gameState, myLength) {
+    const { snakes } = gameState.board;
+
+    for (const snake of snakes) {
+        if (snake.id === gameState.you.id) continue; // Skip your own snake
+
+        const enemyHead = snake.body[0];
+        const enemyLength = snake.body.length;
+
+        // Get possible moves for the enemy snake's head
+        const enemyMoves = getDirections(enemyHead);
+
+        for (const [direction, position] of Object.entries(getDirections(myHead))) {
+            for (const enemyPosition of Object.values(enemyMoves)) {
+                if (position.x === enemyPosition.x && position.y === enemyPosition.y) {
+                    // Avoid head-to-head collision if the enemy snake is equal or longer
+                    if (enemyLength >= myLength) {
+                        moveSafety[direction] = false;
+                    }
+                }
+            }
+        }
+    }
+}
+
+function avoidTightCorners(myHead, moveSafety, boardWidth, boardHeight) {
+    // If near a corner, mark moves leading to the corner as unsafe
+    if (myHead.x === 1 && myHead.y === 1) { // Near top-left corner
+        moveSafety.left = false;
+        moveSafety.down = false;
+    } else if (myHead.x === boardWidth - 2 && myHead.y === 1) { // Near top-right corner
+        moveSafety.right = false;
+        moveSafety.down = false;
+    } else if (myHead.x === 1 && myHead.y === boardHeight - 2) { // Near bottom-left corner
+        moveSafety.left = false;
+        moveSafety.up = false;
+    } else if (myHead.x === boardWidth - 2 && myHead.y === boardHeight - 2) { // Near bottom-right corner
+        moveSafety.right = false;
+        moveSafety.up = false;
+    }
 }
 
 function getDirections(head) {
@@ -100,7 +129,7 @@ function getDirections(head) {
     };
 }
 
-function hasSufficientSpace(start, myBody, gameState) {
+function calculateOpenSpace(start, myBody, gameState) {
     const { width: boardWidth, height: boardHeight, snakes } = gameState.board;
 
     // Use flood-fill to calculate open space
@@ -142,8 +171,7 @@ function hasSufficientSpace(start, myBody, gameState) {
         queue.push({ x, y: y + 1 });
     }
 
-    // Check if the open space is sufficient for the snake
-    return spaceCount > myBody.length * 2; // Ensure the space is at least double the snake's length
+    return spaceCount; // Return the total open space count
 }
 
 function prioritizeFood(food, myHead, moveSafety, gameState, myLength, boardWidth, boardHeight) {
