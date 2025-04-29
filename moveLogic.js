@@ -11,9 +11,13 @@ export default function move(gameState) {
     const myNeck = gameState.you.body[1];
     const myBody = gameState.you.body;
     const myLength = gameState.you.body.length;
+    const myTail = myBody[myBody.length - 1]; // Get the tail position
     const myBodySet = new Set(myBody.map(segment => `${segment.x},${segment.y}`));
     const board = gameState.board;
     const { width: boardWidth, height: boardHeight } = board;
+
+    // Remove the tail from the body set since it moves
+    myBodySet.delete(`${myTail.x},${myTail.y}`);
 
     // Prevent moving backwards
     if (myNeck.x < myHead.x) moveSafety.left = false;
@@ -41,7 +45,7 @@ export default function move(gameState) {
     // Avoid tight corners
     avoidTightCorners(myHead, moveSafety, boardWidth, boardHeight);
 
-    // Avoid trap spaces using improved flood-fill space calculation
+    // Analyze open spaces for each move
     const spaceMap = {};
     for (const [direction, position] of Object.entries(getDirections(myHead))) {
         if (moveSafety[direction]) {
@@ -57,16 +61,18 @@ export default function move(gameState) {
 
     // Target the closest food while avoiding contested food
     const foodMove = prioritizeFood(gameState.board.food, myHead, moveSafety, gameState, myBody.length, boardWidth, boardHeight);
-    if (foodMove) return { move: foodMove };
+    if (foodMove) {
+        console.log(`MOVE ${gameState.turn}: Moving towards food: ${foodMove}`);
+        return { move: foodMove };
+    }
 
-    // Fallback to a safe move with strict out-of-bounds checks
+    // Fallback to the move with the largest open space
     const safeMoves = Object.keys(moveSafety).filter(direction => moveSafety[direction]);
     if (safeMoves.length === 0) {
-        console.log(`MOVE ${gameState.turn}: No safe moves detected! Moving down`);
+        console.log(`MOVE ${gameState.turn}: No safe moves detected! Default fallback.`);
         return { move: "down" }; // Default fallback
     }
 
-    // Prioritize moves with the largest open space
     const bestMove = safeMoves.reduce((best, direction) => {
         if (!best || spaceMap[direction] > (spaceMap[best] || 0)) {
             return direction;
@@ -181,45 +187,51 @@ function prioritizeFood(food, myHead, moveSafety, gameState, myLength, boardWidt
     let closestDistance = Infinity;
 
     for (const f of food) {
-        // Skip food in corners
-        if (
-            (f.x === 0 && f.y === 0) || // Top-left corner
-            (f.x === boardWidth - 1 && f.y === 0) || // Top-right corner
-            (f.x === 0 && f.y === boardHeight - 1) || // Bottom-left corner
-            (f.x === boardWidth - 1 && f.y === boardHeight - 1) // Bottom-right corner
-        ) {
-            continue; // Skip this food
-        }
-
         const distance = Math.abs(f.x - myHead.x) + Math.abs(f.y - myHead.y);
 
-        let isFoodContested = false;
+        // Skip food in corners or unsafe spaces
+        if (!isFoodSafe(f, boardWidth, boardHeight)) continue;
 
-        // Check if any other snake is approaching the same food
-        for (const snake of gameState.board.snakes) {
-            if (snake.id === gameState.you.id) continue; // Skip your own snake
-
-            const enemyHead = snake.body[0];
-            const enemyDistance = Math.abs(f.x - enemyHead.x) + Math.abs(f.y - enemyHead.y);
-
-            // If another snake is closer or equally close, mark the food as contested
-            if (enemyDistance <= distance) {
-                isFoodContested = true;
-                break;
-            }
+        // Check if the food is contested by larger snakes
+        const isContested = isFoodContested(f, myHead, distance, gameState, myLength);
+        if (isContested) {
+            console.log(`Food at (${f.x}, ${f.y}) is contested by a larger snake. Skipping.`);
+            continue;
         }
 
-        // Skip this food if it's contested
-        if (isFoodContested) continue;
-
-        // Update the closest uncontested food
-        if (distance < closestDistance) {
+        // Check for the safest move towards food
+        const move = determineMoveDirection(f, myHead, moveSafety);
+        if (move && distance < closestDistance) {
             closestDistance = distance;
-            bestMove = determineMoveDirection(f, myHead, moveSafety);
+            bestMove = move;
         }
     }
 
     return bestMove;
+}
+
+function isFoodContested(food, myHead, myDistance, gameState, myLength) {
+    const { snakes } = gameState.board;
+
+    for (const snake of snakes) {
+        if (snake.id === gameState.you.id) continue; // Skip checking against itself
+
+        const enemyHead = snake.body[0];
+        const enemyLength = snake.body.length;
+        const enemyDistance = Math.abs(food.x - enemyHead.x) + Math.abs(food.y - enemyHead.y);
+
+        // If another snake is closer or equally close and is larger, the food is contested
+        if (enemyDistance <= myDistance && enemyLength >= myLength) {
+            return true;
+        }
+    }
+
+    return false; // Food is not contested
+}
+
+function isFoodSafe(food, boardWidth, boardHeight) {
+    // Avoid food in corners
+    return !(food.x === 0 || food.x === boardWidth - 1 || food.y === 0 || food.y === boardHeight - 1);
 }
 
 function determineMoveDirection(target, myHead, moveSafety) {
