@@ -230,7 +230,7 @@ function isFoodContested(food, myHead, myDistance, gameState, myLength) {
 }
 
 function isFoodSafe(food, boardWidth, boardHeight) {
-    // Avoid food in corners
+    // Avoid food in corners 
     return !(food.x === 0 || food.x === boardWidth - 1 || food.y === 0 || food.y === boardHeight - 1);
 }
 
