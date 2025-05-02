@@ -14,7 +14,7 @@ export default function move(gameState) {
     const myBodySet = new Set(myBody.map(segment => `${segment.x},${segment.y}`));
     const board = gameState.board;
     const { width: boardWidth, height: boardHeight } = board;
-    const hazards = new Set(board.hazards.map(hazard => `${hazard.x},${hazard.y}`)); // Track all hazard positions
+    const hazards = new Set(board.hazards.map(hazard => `${hazard.x},${hazard.y}`));
 
     // Step 1: Prevent moving backwards
     preventBackwardMoves(myHead, myNeck, moveSafety);
@@ -225,12 +225,12 @@ function prioritizeFood(food, myHead, moveSafety, gameState, myLength, boardWidt
         // Skip food in corners or unsafe spaces
         if (!isFoodSafe(f, boardWidth, boardHeight)) continue;
 
-        // Check if the food is contested by larger snakes
+        // Check if the food is contested by another snake that is one block away
         const isContested = isFoodContested(f, myHead, distance, gameState, myLength);
         if (isContested) {
-            console.log(`Food at (${f.x}, ${f.y}) is contested by a larger snake. Skipping.`);
+            console.log(`Food at (${f.x}, ${f.y}) is contested by another snake. Skipping.`);
             continue;
-        }
+        } 
 
         // Check for the safest move towards food
         const move = determineMoveDirection(f, myHead, moveSafety);
@@ -251,11 +251,11 @@ function isFoodContested(food, myHead, myDistance, gameState, myLength) {
 
         const enemyHead = snake.body[0];
         const enemyLength = snake.body.length;
-        const enemyDistance = Math.abs(food.x - enemyHead.x) + Math.abs(food.y - enemyHead.y);
 
-        // If another snake is closer or equally close and is larger, the food is contested
-        if (enemyDistance <= myDistance && enemyLength >= myLength) {
-            return true;
+        // Check if another snake is one block away from the food
+        const enemyDistance = Math.abs(food.x - enemyHead.x) + Math.abs(food.y - enemyHead.y);
+        if (enemyDistance === 1) {
+            return true; // Another snake is close enough to contest the food
         }
     }
 
@@ -263,7 +263,7 @@ function isFoodContested(food, myHead, myDistance, gameState, myLength) {
 }
 
 function isFoodSafe(food, boardWidth, boardHeight) {
-    // Avoid food in corners 
+    // Avoid foo d in corners
     return !(food.x === 0 || food.x === boardWidth - 1 || food.y === 0 || food.y === boardHeight - 1);
 }
 
