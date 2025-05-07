@@ -31,8 +31,8 @@ export default function move(gameState) {
     // Step 5: Avoid head-to-head collisions
     avoidHeadToHeadCollisions(myHead, moveSafety, gameState, myLength);
 
-    // Step 6: Avoid tight corners
-    avoidTightCorners(myHead, moveSafety, boardWidth, boardHeight);
+    // Step 6: Avoid tight corners and blocked areas
+    avoidBlockedSpaces(myHead, moveSafety, myBody, gameState);
 
     // Step 7: Analyze open spaces for each move and avoid small spaces
     const spaceMap = {};
@@ -55,22 +55,16 @@ export default function move(gameState) {
         return { move: foodMove };
     }
 
-    // Step 9: Fallback to the move with the largest open space
-    const safeMoves = Object.keys(moveSafety).filter(direction => moveSafety[direction]);
-    if (safeMoves.length === 0) {
-        console.log(`MOVE ${gameState.turn}: No safe moves detected! Default fallback.`);
-        return { move: "down" }; // Default fallback
+    // Step 9: Fallback to available open space
+    const fallbackMove = fallbackToOpenSpace(myHead, moveSafety, spaceMap);
+    if (fallbackMove) {
+        console.log(`MOVE ${gameState.turn}: Fallback to open space: ${fallbackMove}`);
+        return { move: fallbackMove };
     }
 
-    const bestMove = safeMoves.reduce((best, direction) => {
-        if (!best || spaceMap[direction] > (spaceMap[best] || 0)) {
-            return direction;
-        }
-        return best;
-    }, null);
-
-    console.log(`MOVE ${gameState.turn}: Best move based on open space: ${bestMove}`);
-    return { move: bestMove };
+    // Step 10: Default fallback if no other moves are found
+    console.log(`MOVE ${gameState.turn}: Default fallback to "down".`);
+    return { move: "down" }; // Default fallback
 }
 
 function preventBackwardMoves(myHead, myNeck, moveSafety) {
@@ -137,20 +131,18 @@ function avoidHeadToHeadCollisions(myHead, moveSafety, gameState, myLength) {
     }
 }
 
-function avoidTightCorners(myHead, moveSafety, boardWidth, boardHeight) {
-    // If near a corner, mark moves leading to the corner as unsafe
-    if (myHead.x === 1 && myHead.y === 1) { // Near top-left corner
-        moveSafety.left = false;
-        moveSafety.down = false;
-    } else if (myHead.x === boardWidth - 2 && myHead.y === 1) { // Near top-right corner
-        moveSafety.right = false;
-        moveSafety.down = false;
-    } else if (myHead.x === 1 && myHead.y === boardHeight - 2) { // Near bottom-left corner
-        moveSafety.left = false;
-        moveSafety.up = false;
-    } else if (myHead.x === boardWidth - 2 && myHead.y === boardHeight - 2) { // Near bottom-right corner
-        moveSafety.right = false;
-        moveSafety.up = false;
+function avoidBlockedSpaces(myHead, moveSafety, myBody, gameState) {
+    for (const [direction, nextPosition] of Object.entries(getDirections(myHead))) {
+        if (!moveSafety[direction]) continue;
+
+        // Simulate moving into the space and calculate the surrounding space
+        const simulatedBody = [nextPosition, ...myBody.slice(0, -1)];
+        const openSpace = calculateOpenSpace(nextPosition, simulatedBody, gameState);
+
+        if (openSpace < 4) {
+            // Avoid moves that create less than a 2x2 open space
+            moveSafety[direction] = false;
+        }
     }
 }
 
@@ -169,7 +161,7 @@ function calculateOpenSpace(start, myBody, gameState) {
     // Use flood-fill to calculate open space
     const queue = [start];
     const visited = new Set();
-    const myBodySet = new Set(myBody.map(segment => `${segment.x},${segment.y}`)); // Ensure myBody is read
+    const myBodySet = new Set(myBody.map(segment => `${segment.x},${segment.y}`));
 
     let spaceCount = 0;
 
@@ -213,64 +205,15 @@ function calculateOpenSpace(start, myBody, gameState) {
     return spaceCount; // Return the total open space count
 }
 
-function prioritizeFood(food, myHead, moveSafety, gameState, myLength, boardWidth, boardHeight) {
-    if (food.length === 0) return null;
+function fallbackToOpenSpace(myHead, moveSafety, spaceMap) {
+    // Prioritize any available open space
+    const safeMoves = Object.keys(moveSafety).filter(direction => moveSafety[direction]);
+    if (safeMoves.length === 0) return null;
 
-    let bestMove = null;
-    let closestDistance = Infinity;
-
-    for (const f of food) {
-        const distance = Math.abs(f.x - myHead.x) + Math.abs(f.y - myHead.y);
-
-        // Skip food in corners or unsafe spaces
-        if (!isFoodSafe(f, boardWidth, boardHeight)) continue;
-
-        // Check if the food is contested by another snake that is one block away
-        const isContested = isFoodContested(f, myHead, distance, gameState, myLength);
-        if (isContested) {
-            console.log(`Food at (${f.x}, ${f.y}) is contested by another snake. Skipping.`);
-            continue;
-        } 
-
-        // Check for the safest move towards food
-        const move = determineMoveDirection(f, myHead, moveSafety);
-        if (move && distance < closestDistance) {
-            closestDistance = distance;
-            bestMove = move;
+    return safeMoves.reduce((best, direction) => {
+        if (!best || spaceMap[direction] > (spaceMap[best] || 0)) {
+            return direction;
         }
-    }
-
-    return bestMove;
-}
-
-function isFoodContested(food, myHead, myDistance, gameState, myLength) {
-    const { snakes } = gameState.board;
-
-    for (const snake of snakes) {
-        if (snake.id === gameState.you.id) continue; // Skip checking against itself
-
-        const enemyHead = snake.body[0];
-        const enemyLength = snake.body.length;
-
-        // Check if another snake is one block away from the food
-        const enemyDistance = Math.abs(food.x - enemyHead.x) + Math.abs(food.y - enemyHead.y);
-        if (enemyDistance === 1) {
-            return true; // Another snake is close enough to contest the food
-        }
-    }
-
-    return false; // Food is not contested
-}
-
-function isFoodSafe(food, boardWidth, boardHeight) {
-    // Avoid foo d in corners
-    return !(food.x === 0 || food.x === boardWidth - 1 || food.y === 0 || food.y === boardHeight - 1);
-}
-
-function determineMoveDirection(target, myHead, moveSafety) {
-    if (target.x < myHead.x && moveSafety.left) return "left";
-    if (target.x > myHead.x && moveSafety.right) return "right";
-    if (target.y < myHead.y && moveSafety.down) return "down";
-    if (target.y > myHead.y && moveSafety.up) return "up";
-    return null; // No safe move toward the target
+        return best;
+    }, null);
 }
