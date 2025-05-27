@@ -85,7 +85,7 @@ function preventSelfCollision(myHead, myBodySet, moveSafety) {
     for (const [direction, nextPosition] of Object.entries(getDirections(myHead))) {
         const key = `${nextPosition.x},${nextPosition.y}`;
         if (myBodySet.has(key)) {
-            moveSafety[direction] = false; // Avoid moving into a body segment
+            moveSafety[direction] = false; // Avoid moving into a body part
         }
     }
 }
@@ -99,7 +99,7 @@ function avoidHazards(myHead, myNeck, moveSafety, hazards) {
             moveSafety[direction] = false;
         }
 
-        // Prevent moving backward into the neck
+        // Prevent moving backward
         if (nextPosition.x === myNeck.x && nextPosition.y === myNeck.y) {
             moveSafety[direction] = false;
         }
